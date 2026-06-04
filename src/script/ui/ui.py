@@ -211,7 +211,7 @@ def choose_install_folder():
 
 
 def main():
-    global root, selected_path, folder_label, install_button, select_button, status_label, uninstall_button, open_desktop_button, desktop_path_label
+    global root, selected_path, folder_label, install_button, select_button, status_label, uninstall_button, open_desktop_button, desktop_path_label, progress_bar, animation_label, log_text
 
     root = tk.Tk()
     root.geometry("620x520")
