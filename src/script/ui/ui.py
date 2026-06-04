@@ -2,7 +2,8 @@ import os
 import sys
 import threading
 import tkinter as tk
-from tkinter import filedialog, messagebox
+from tkinter import filedialog, messagebox, scrolledtext
+from tkinter import ttk
 
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 SRC_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -23,6 +24,46 @@ installed_path = None
 desktop_file_path = None
 open_desktop_button = None
 desktop_path_label = None
+progress_bar = None
+animation_label = None
+animation_index = 0
+log_text = None
+spinner_frames = ["⣷", "⣯", "⣟", "⡿", "⣻", "⣽", "⣾", "⣶"]
+animation_running = False
+
+
+def append_log(message: str, level: str = "INFO"):
+    if log_text:
+        log_text.configure(state=tk.NORMAL)
+        log_text.insert(tk.END, f"[{level}] {message}\n")
+        log_text.see(tk.END)
+        log_text.configure(state=tk.DISABLED)
+
+
+def update_animation():
+    global animation_index
+    if not animation_running or animation_label is None:
+        return
+    animation_label.config(text=spinner_frames[animation_index % len(spinner_frames)])
+    animation_index += 1
+    root.after(120, update_animation)
+
+
+def start_animation():
+    global animation_running
+    animation_running = True
+    if progress_bar:
+        progress_bar.start(10)
+    update_animation()
+
+
+def stop_animation():
+    global animation_running
+    animation_running = False
+    if progress_bar:
+        progress_bar.stop()
+    if animation_label:
+        animation_label.config(text="")
 
 
 def download_and_install(target_dir):
@@ -64,21 +105,42 @@ def perform_uninstall():
     if not confirm:
         return
 
-    try:
-        uninstall_notohiis(target_dir, APP_NAME)
-    except Exception as error:
-        messagebox.showerror("Erro", str(error))
-        status_label.config(text="Erro durante a desinstalação.")
-    else:
-        installed_path = None
-        desktop_file_path = None
-        uninstall_button.config(state=tk.DISABLED)
-        open_desktop_button.config(state=tk.DISABLED)
-        desktop_path_label.config(text="")
-        install_button.config(state=tk.NORMAL)
-        select_button.config(state=tk.NORMAL)
-        status_label.config(text="Notohiis desinstalado com sucesso.")
-        messagebox.showinfo("Desinstalação", "Notohiis foi removido com sucesso.")
+    install_button.config(state=tk.DISABLED)
+    select_button.config(state=tk.DISABLED)
+    uninstall_button.config(state=tk.DISABLED)
+    open_desktop_button.config(state=tk.DISABLED)
+    status_label.config(text="Desinstalando... Aguarde.")
+    append_log(f"Iniciando desinstalação de: {target_dir}")
+    start_animation()
+
+    def worker():
+        try:
+            uninstall_notohiis(target_dir, APP_NAME)
+        except Exception as error:
+            root.after(0, lambda: stop_animation())
+            root.after(0, lambda: append_log(str(error), level="ERROR"))
+            root.after(0, lambda: status_label.config(text="Erro durante a desinstalação."))
+            root.after(0, lambda: install_button.config(state=tk.NORMAL))
+            root.after(0, lambda: select_button.config(state=tk.NORMAL))
+            root.after(0, lambda: messagebox.showerror("Erro", str(error)))
+        else:
+            def success():
+                global installed_path, desktop_file_path
+                installed_path = None
+                desktop_file_path = None
+                uninstall_button.config(state=tk.DISABLED)
+                open_desktop_button.config(state=tk.DISABLED)
+                desktop_path_label.config(text="")
+                install_button.config(state=tk.NORMAL)
+                select_button.config(state=tk.NORMAL)
+                status_label.config(text="Notohiis desinstalado com sucesso.")
+                append_log("Desinstalação concluída com sucesso.")
+                stop_animation()
+                messagebox.showinfo("Desinstalação", "Notohiis foi removido com sucesso.")
+
+            root.after(0, success)
+
+    threading.Thread(target=worker, daemon=True).start()
 
 
 def perform_installation():
@@ -89,16 +151,23 @@ def perform_installation():
 
     install_button.config(state=tk.DISABLED)
     select_button.config(state=tk.DISABLED)
-    status_label.config(text="Instalando... Aguarde.")
+    uninstall_button.config(state=tk.DISABLED)
+    open_desktop_button.config(state=tk.DISABLED)
+    status_label.config(text="Iniciando instalação...")
+    append_log("Iniciando instalação do Notohiis.")
+    start_animation()
 
     def worker():
         try:
+            root.after(0, lambda: append_log("Clonando repositório Git..."))
             repo_path, desktop_path = download_and_install(selected_folder)
         except Exception as error:
-            root.after(0, lambda: messagebox.showerror("Erro", str(error)))
+            root.after(0, lambda: stop_animation())
+            root.after(0, lambda: append_log(str(error), level="ERROR"))
             root.after(0, lambda: status_label.config(text="Erro durante a instalação."))
             root.after(0, lambda: install_button.config(state=tk.NORMAL))
             root.after(0, lambda: select_button.config(state=tk.NORMAL))
+            root.after(0, lambda: messagebox.showerror("Erro", str(error)))
         else:
             def success():
                 global installed_path, desktop_file_path
@@ -107,7 +176,10 @@ def perform_installation():
                 uninstall_button.config(state=tk.NORMAL)
                 open_desktop_button.config(state=tk.NORMAL)
                 desktop_path_label.config(text=f"Caminho .desktop: {desktop_path}")
-                status_label.config(text=f"Instalação concluída em: {repo_path}")
+                status_label.config(text="Instalação concluída com sucesso.")
+                append_log(f"Instalação concluída em: {repo_path}")
+                append_log(f"Arquivo .desktop: {desktop_path}")
+                stop_animation()
                 messagebox.showinfo(
                     "Sucesso",
                     f"Notohiis foi instalado com sucesso!\n\nArquivo .desktop criado em:\n{desktop_path}",
@@ -133,44 +205,88 @@ def choose_install_folder():
     folder = filedialog.askdirectory(title="Selecione a pasta de instalação")
     if folder:
         selected_path.set(folder)
-        folder_label.config(text=folder)
         install_button.config(state=tk.NORMAL)
         status_label.config(text="Pasta selecionada. Pronto para instalar.")
+        append_log(f"Pasta selecionada: {folder}")
 
 
 def main():
     global root, selected_path, folder_label, install_button, select_button, status_label, uninstall_button, open_desktop_button, desktop_path_label
 
     root = tk.Tk()
-    root.geometry("520x260")
-    root.title("Instalador do Notohiis")
+    root.geometry("620x520")
+    root.title("Notohiis Installer 0.4alfa")
+    root.configure(bg="#11111a")
     root.resizable(False, False)
 
-    title_label = tk.Label(root, text="Instalador do Notohiis", font=("Helvetica", 16, "bold"))
-    title_label.pack(pady=12)
+    style = ttk.Style(root)
+    style.theme_use("clam")
+    style.configure("TButton", font=("Segoe UI", 10), padding=10)
+    style.configure("TLabel", background="#11111a", foreground="#f5f5f5")
+    style.configure("Title.TLabel", font=("Segoe UI", 18, "bold"), foreground="#ffffff")
+    style.configure("Subtitle.TLabel", font=("Segoe UI", 10), foreground="#bbbbbb")
+    style.configure("Log.TLabel", font=("Segoe UI", 9), foreground="#00ccff")
+    style.configure("TFrame", background="#11111a")
+    style.configure("TEntry", fieldbackground="#1f1f2f", foreground="#ffffff")
+
+    title_frame = ttk.Frame(root, padding=(20, 20, 20, 10))
+    title_frame.pack(fill=tk.X)
+
+    title_label = ttk.Label(title_frame, text="Notohiis Installer 0.4alfa", style="Title.TLabel")
+    title_label.pack(anchor=tk.W)
+
+    subtitle_label = ttk.Label(title_frame, text="Instale, abra ou desinstale o Notohiis com um clique.", style="Subtitle.TLabel")
+    subtitle_label.pack(anchor=tk.W, pady=(4, 0))
 
     selected_path = tk.StringVar()
 
-    select_button = tk.Button(root, text="Escolher pasta de instalação", command=choose_install_folder, width=28)
-    select_button.pack(pady=8)
+    main_frame = ttk.Frame(root, padding=(20, 10, 20, 10))
+    main_frame.pack(fill=tk.BOTH, expand=True)
 
-    folder_label = tk.Label(root, text="Nenhuma pasta selecionada.", wraplength=480, justify=tk.LEFT)
-    folder_label.pack(pady=6)
+    path_frame = ttk.Frame(main_frame)
+    path_frame.pack(fill=tk.X, pady=(0, 12))
 
-    install_button = tk.Button(root, text="Instalar Notohiis", command=perform_installation, width=28, state=tk.DISABLED)
-    install_button.pack(pady=8)
+    path_label = ttk.Label(path_frame, text="Pasta de instalação:")
+    path_label.pack(anchor=tk.W)
 
-    uninstall_button = tk.Button(root, text="Desinstalar Notohiis", command=perform_uninstall, width=28, state=tk.DISABLED)
-    uninstall_button.pack(pady=8)
+    folder_frame = ttk.Frame(path_frame)
+    folder_frame.pack(fill=tk.X, pady=(6, 0))
 
-    open_desktop_button = tk.Button(root, text="Abrir .desktop", command=open_desktop_file, width=28, state=tk.DISABLED)
-    open_desktop_button.pack(pady=8)
+    folder_display = ttk.Entry(folder_frame, textvariable=selected_path, state="readonly", width=50)
+    folder_display.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
-    desktop_path_label = tk.Label(root, text="", wraplength=480, justify=tk.LEFT, fg="#007acc")
-    desktop_path_label.pack(pady=4)
+    select_button = ttk.Button(folder_frame, text="Selecionar", command=choose_install_folder)
+    select_button.pack(side=tk.LEFT, padx=(10, 0))
 
-    status_label = tk.Label(root, text="Selecione a pasta e clique em instalar.")
-    status_label.pack(pady=8)
+    desktop_path_label = ttk.Label(main_frame, text="", style="Subtitle.TLabel", wraplength=560, justify=tk.LEFT)
+    desktop_path_label.pack(anchor=tk.W, pady=(0, 12))
+
+    button_frame = ttk.Frame(main_frame)
+    button_frame.pack(fill=tk.X, pady=(0, 12))
+
+    install_button = ttk.Button(button_frame, text="Instalar Notohiis", command=perform_installation, width=20, state=tk.DISABLED)
+    install_button.pack(side=tk.LEFT, padx=(0, 10))
+
+    uninstall_button = ttk.Button(button_frame, text="Desinstalar Notohiis", command=perform_uninstall, width=20, state=tk.DISABLED)
+    uninstall_button.pack(side=tk.LEFT, padx=(0, 10))
+
+    open_desktop_button = ttk.Button(button_frame, text="Abrir .desktop", command=open_desktop_file, width=20, state=tk.DISABLED)
+    open_desktop_button.pack(side=tk.LEFT)
+
+    progress_bar = ttk.Progressbar(main_frame, mode="indeterminate")
+    progress_bar.pack(fill=tk.X, pady=(0, 12))
+
+    animation_label = ttk.Label(main_frame, text="", font=("Segoe UI", 18), foreground="#00ffbf")
+    animation_label.pack(anchor=tk.CENTER, pady=(0, 12))
+
+    log_label = ttk.Label(main_frame, text="Logs de instalação:", style="Log.TLabel")
+    log_label.pack(anchor=tk.W)
+
+    log_text = scrolledtext.ScrolledText(main_frame, height=10, bg="#0f111a", fg="#e0e0ff", insertbackground="#ffffff", state=tk.DISABLED, wrap=tk.WORD)
+    log_text.pack(fill=tk.BOTH, expand=True)
+
+    status_label = ttk.Label(root, text="Selecione a pasta e clique em instalar.", style="Subtitle.TLabel", padding=(20, 10))
+    status_label.pack(fill=tk.X)
 
     root.mainloop()
 
