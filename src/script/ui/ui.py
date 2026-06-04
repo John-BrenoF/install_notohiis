@@ -29,12 +29,19 @@ def download_and_install(target_dir):
     target_dir = os.path.join(os.path.abspath(target_dir), APP_NAME)
     repo_path = download_repository(REPO_URL, target_dir)
     icon_dest = install_icon(ICON_PATH, APP_NAME)
+
+    shell_path = os.path.join(repo_path, "notohiis.sh")
+    if not os.path.exists(shell_path):
+        raise FileNotFoundError(f"Arquivo de inicialização não encontrado: {shell_path}")
+    os.chmod(shell_path, 0o755)
+
     desktop_path = create_desktop_shortcut(
         app_name=APP_NAME,
-        exec_command=f"xdg-open \"{repo_path}\"",
+        exec_command=shell_path,
         icon_path=icon_dest,
         display_name=APP_DISPLAY_NAME,
         version=APP_VERSION,
+        working_dir=repo_path,
     )
     return repo_path, desktop_path
 

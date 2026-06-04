@@ -46,6 +46,7 @@ def create_desktop_shortcut(
     icon_path: str,
     display_name: Optional[str] = None,
     version: Optional[str] = None,
+    working_dir: Optional[str] = None,
     create_desktop_file: bool = True,
 ) -> str:
     app_dir = Path.home() / ".local/share/applications"
@@ -56,6 +57,8 @@ def create_desktop_shortcut(
     content += f"Name={display_name or app_name}\n"
     content += "Type=Application\n"
     content += f"Exec={_desktop_escape(exec_command)}\n"
+    if working_dir:
+        content += f"Path={_desktop_escape(os.path.abspath(working_dir))}\n"
     content += f"Icon={_desktop_escape(os.path.abspath(icon_path))}\n"
     content += "Terminal=false\n"
     content += "Categories=Utility;Development;\n"
