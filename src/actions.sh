@@ -9,6 +9,7 @@ function action_check_dependencies() {
 
 function action_create_desktop_entry() {
   local exec_path="$1"
+  local version="${2:-}"
   mkdir -p "$DESKTOP_ENTRY_DIR" "$ICON_DEST_DIR"
 
   local icon_target="$ICON_PATH"
@@ -18,9 +19,14 @@ function action_create_desktop_entry() {
   fi
 
   local desktop_file="$DESKTOP_ENTRY_DIR/$APP_NAME.desktop"
+  local name_field="$APP_DISPLAY_NAME"
+  if [[ -n "$version" && "$version" != "main" ]]; then
+    name_field="$APP_DISPLAY_NAME ($version)"
+  fi
+
   cat > "$desktop_file" <<EOF
 [Desktop Entry]
-Name=$APP_DISPLAY_NAME
+Name=${name_field}
 Type=Application
 Exec=$exec_path
 Icon=$icon_target
@@ -67,6 +73,10 @@ function action_install() {
 
   echo -e "${UI_GREEN}Instalando em: ${install_dir}${UI_RESET}"
   echo "Clonando $repo_url na versão '$version'..."
+  # Update UI status
+  if declare -f ui_set_status >/dev/null 2>&1; then
+    ui_set_status "Clonando $repo_url em $install_dir"
+  fi
 
   # Perform git clone with progress parsing (uses stdbuf if available to force line buffering)
   local GIT_CMD=(git clone --progress --branch "$version" --depth 1 "$repo_url" "$install_dir")
@@ -74,7 +84,14 @@ function action_install() {
     stdbuf -oL -eL "${GIT_CMD[@]}" 2>&1 | while IFS= read -r line; do
       if [[ "$line" =~ ([0-9]{1,3})% ]]; then
         local pct="${BASH_REMATCH[1]}"
-        printf "\r${UI_CYAN}Progresso: %s%%${UI_RESET}" "$pct"
+        local bar_len=30
+        local filled=$((pct * bar_len / 100))
+        local empty=$((bar_len - filled))
+        local bar="$(printf '%0.s#' $(seq 1 $filled))$(printf '%0.s-' $(seq 1 $empty))"
+        if declare -f ui_set_progress >/dev/null 2>&1; then
+          ui_set_progress "[${bar}] ${pct}%"
+        fi
+        printf "\r${UI_CYAN}Progresso: [%s] %s%%${UI_RESET}" "$bar" "$pct"
       else
         printf "\n%s\n" "$line"
       fi
@@ -84,7 +101,14 @@ function action_install() {
     git clone --progress --branch "$version" --depth 1 "$repo_url" "$install_dir" 2>&1 | while IFS= read -r line; do
       if [[ "$line" =~ ([0-9]{1,3})% ]]; then
         local pct="${BASH_REMATCH[1]}"
-        printf "\r${UI_CYAN}Progresso: %s%%${UI_RESET}" "$pct"
+        local bar_len=30
+        local filled=$((pct * bar_len / 100))
+        local empty=$((bar_len - filled))
+        local bar="$(printf '%0.s#' $(seq 1 $filled))$(printf '%0.s-' $(seq 1 $empty))"
+        if declare -f ui_set_progress >/dev/null 2>&1; then
+          ui_set_progress "[${bar}] ${pct}%"
+        fi
+        printf "\r${UI_CYAN}Progresso: [%s] %s%%${UI_RESET}" "$bar" "$pct"
       else
         printf "\n%s\n" "$line"
       fi
@@ -101,7 +125,7 @@ function action_install() {
   local shell_path="$install_dir/notohiis.sh"
   if [[ -f "$shell_path" ]]; then
     chmod +x "$shell_path"
-    action_create_desktop_entry "$shell_path"
+    action_create_desktop_entry "$shell_path" "$version"
     echo -e "${UI_GREEN}Instalação concluída em: ${install_dir}${UI_RESET}"
     echo "Atalho criado em: $DESKTOP_ENTRY_DIR/$APP_NAME.desktop"
   else

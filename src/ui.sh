@@ -4,6 +4,8 @@ UI_OPTIONS=()
 UI_SELECTED_INDEX=0
 UI_SELECTED_OPTION=""
 UI_PROMPT_MESSAGE=""
+UI_STATUS=""
+UI_PROGRESS=""
 
 UI_RESET=$'\e[0m'
 UI_BOLD=$'\e[1m'
@@ -26,7 +28,9 @@ function ui_draw_menu() {
   local border_bot="└$(printf '─%.0s' $(seq 1 $((width - 2))))┘"
 
   echo -e "${UI_BLUE}${border_top}${UI_RESET}"
-  printf "%s│ %-${content_width}s │%s\n" "$UI_BLUE" "$UI_PROMPT_MESSAGE" "$UI_RESET"
+  # Header with app name and status
+  local title="${APP_DISPLAY_NAME:-notohiis}"
+  printf "%s│ ${UI_BOLD}${UI_WHITE}%-${content_width}s${UI_RESET}${UI_BLUE} │%s\n" "$UI_BLUE" "$title" "$UI_RESET"
   echo -e "${UI_BLUE}├$(printf '─%.0s' $(seq 1 $((width - 2))))┤${UI_RESET}"
 
   for index in "${!UI_OPTIONS[@]}"; do
@@ -38,6 +42,12 @@ function ui_draw_menu() {
     fi
   done
   echo -e "${UI_BLUE}${border_bot}${UI_RESET}"
+  if [[ -n "$UI_STATUS" ]]; then
+    echo -e "${UI_GREEN}${UI_STATUS}${UI_RESET}"
+  fi
+  if [[ -n "$UI_PROGRESS" ]]; then
+    echo -e "${UI_CYAN}${UI_PROGRESS}${UI_RESET}"
+  fi
   echo -e "${UI_GREEN}Use ↑ ↓ para navegar, ENTER para confirmar. Ctrl+C para sair.${UI_RESET}"
 }
 
@@ -87,6 +97,7 @@ function ui_draw_browser() {
   local border_bot="└$(printf '─%.0s' $(seq 1 $((width - 2))))┘"
 
   echo -e "${UI_BLUE}${border_top}${UI_RESET}"
+  # Header: current directory and optional status
   printf "%s│ ${UI_BOLD}${UI_WHITE}%-${content_width}s${UI_RESET}${UI_BLUE} │%s\n" "$UI_BLUE" "$UI_PROMPT_MESSAGE" "$UI_RESET"
   echo -e "${UI_BLUE}${border_mid}${UI_RESET}"
 
@@ -100,7 +111,26 @@ function ui_draw_browser() {
   done
 
   echo -e "${UI_BLUE}${border_bot}${UI_RESET}"
+  if [[ -n "$UI_STATUS" ]]; then
+    echo -e "${UI_GREEN}${UI_STATUS}${UI_RESET}"
+  fi
+  if [[ -n "$UI_PROGRESS" ]]; then
+    echo -e "${UI_CYAN}${UI_PROGRESS}${UI_RESET}"
+  fi
   echo -e "${UI_GREEN}Use ↑ ↓ para navegar, ENTER para entrar/selecionar, Ctrl+C para sair.${UI_RESET}"
+}
+
+function ui_set_status() {
+  UI_STATUS="$1"
+}
+
+function ui_set_progress() {
+  UI_PROGRESS="$1"
+}
+
+function ui_clear_status() {
+  UI_STATUS=""
+  UI_PROGRESS=""
 }
 
 function ui_prompt_directory() {
