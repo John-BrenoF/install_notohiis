@@ -62,3 +62,25 @@ function config_set_install_dir() {
 function config_get_install_dir() {
   printf '%s' "$INSTALL_DIR"
 }
+
+function config_list_directories() {
+  local current_dir="$1"
+  if [[ ! -d "$current_dir" ]]; then
+    return 0
+  fi
+
+  local entry
+  for entry in "$current_dir"/*; do
+    if [[ -d "$entry" ]]; then
+      printf '%s\n' "$(basename "$entry")/"
+    fi
+  done | sort
+}
+
+function config_normalize_path() {
+  local path="$1"
+  if [[ "$path" == ~* ]]; then
+    path="${path/#~/$HOME}"
+  fi
+  printf '%s' "$path"
+}
